@@ -1,161 +1,140 @@
-from shiny import App, render, ui, reactive
+from functools import partial
+from pathlib import Path
+from faicons import icon_svg
+
+from shiny.ui import output_image
+from shiny import render, reactive
+from shiny.express import ui, input, render
 from shiny.types import ImgData
-from simulation import simulate_trial, get_plot, get_plot_pfs, get_plot_os, get_hazard_ratio_pfs, get_hazard_ratio_os
-import os
 
-DIR = os.path.dirname(__file__)
+from simulation import simulate_trial, get_plot_pfs, get_plot_os, get_plot_eos, get_hazard_ratio_pfs, get_hazard_ratio_os, get_hazard_ratio_eos
 
-N = 10000
-DEFAULT_H = 0.2
+link_mc = "https://i.ibb.co/Bf7XHG4/markov-chain.png"
 
-app_ui = ui.page_sidebar( 
+N = 20000
+DEFAULT_H = 0.1
 
-    ui.sidebar(
-        {"style": 'padding-top:30; padding-bottom:30; padding-right:20; padding-left:20'},
-        ui.markdown(
-            """
-            This visualization allows you to Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor.
+MIN_SLIDER = 0.0
+MAX_SLIDER = 0.3
 
-            *You can set the parameters here to explore different settings.* **Add more description**.
+here = Path(__file__).parent
 
-            """
-        ),
-
-        ui.output_image("formula", height='50px', ),
-
-        ui.div(
-            {"style": "font-size:12px; font-weight: normal;"},
-            ui.accordion(
-                ui.accordion_panel(
-                    "Hazard Progression",
-                    ui.row(
-                        ui.column(6, ui.input_slider("h_progression_treatment", 'Treatment', 0.001, 1, DEFAULT_H, step=0.05)),
-                        ui.column(6, ui.input_slider("h_progression_control", 'Control', 0.001, 1, DEFAULT_H, step=0.05))
-                    )
-                
-                ),
-                ui.accordion_panel(
-                    "Hazard Unknown",
-                    ui.row(
-                        ui.column(6, ui.input_slider("h_censor_treatment", 'Treatment', 0.001, 1, DEFAULT_H, step=0.05)),
-                        ui.column(6, ui.input_slider("h_censor_control", 'Control', 0.001, 1, DEFAULT_H, step=0.05))
-                    )
-                ),
-                ui.accordion_panel(
-                    "Hazard Death (No progression)",
-                    ui.row(
-                        ui.column(6, ui.input_slider("h_death_treatment", 'Treatment', 0.001, 1, DEFAULT_H, step=0.05)),
-                        ui.column(6, ui.input_slider("h_death_control", 'Control', 0.001, 1, DEFAULT_H, step=0.05))
-                    )
-                ),
-                ui.accordion_panel(
-                    "Hazard Death (Progression unknown)",
-                    ui.row(
-                        ui.column(6, ui.input_slider("h_death_given_censor_treatment", 'Treatment', 0.001, 1, DEFAULT_H + 0.1, step=0.05)),
-                        ui.column(6, ui.input_slider("h_death_given_censor_control", 'Control', 0.001, 1, DEFAULT_H + 0.1, step=0.05))
-                    )
-                ),
-                ui.accordion_panel(
-                    "Hazard Death (Progression)",
-                    ui.row(
-                        ui.column(6, ui.input_slider("h_death_given_progression_treatment", 'Treatment', 0.001, 1, DEFAULT_H + 0.1, step=0.05)),
-                        ui.column(6, ui.input_slider("h_death_given_progression_control", 'Control', 0.001, 1, DEFAULT_H + 0.1, step=0.05))
-                    )
-                ),
-                open=False
-            )   
-        ),
-        width="400px"
-    ),
-
-    ui.div(
-        ui.div(
-            ui.row(
-                ui.column(
-                    6,
-                    ui.h4('Progression-free Survival'),
-                    ui.value_box(
-                        "Hazard Ratio",
-                        ui.output_text("hazard_ratio_pfs"),
-                        showcase_layout='bottom',
-                        theme="text-black",
-                    ),
-                    ui.card(
-                        ui.output_plot('kaplan_meier_plot_pfs'),
-                        style='border-radius: 10px;'
-                    )
-                    
-                ),
-                ui.column(
-                    6, 
-                    ui.h4('Overall Survival'),
-                    ui.value_box(
-                        "Hazard Ratio",
-                        ui.output_text("hazard_ratio_os"),
-                        showcase_layout='bottom',
-                        theme="text-black",
-                    ),
-                    ui.card(
-                        ui.output_plot('kaplan_meier_plot_os'),
-                        style='border-radius: 10px;'
-                    )
-                )
-            ) 
-        ),
-    ),
-    
-    title='Trial Outcome Calculator'
+ui.tags.script(
+    src="https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"
 )
+ui.tags.script("if (window.MathJax) MathJax.Hub.Queue(['Typeset', MathJax.Hub]);")
 
-def server(input, output, session):
+with ui.div(class_="py-5 text-center mx-0"):
+    ui.h3("Clinical Trial Outcome Simulator")
 
-    @reactive.Calc
-    def simulation_results():
-        # TODO: Add simulation here
-        return simulate_trial(
-            n=N,
+ui.accordion()
+with ui.accordion(id="acc", open=["Introduction", "Parametrization", "Results"]):  
+    with ui.accordion_panel("Introduction"):
+        with ui.div(class_="py-4 mx-auto text-left"):
+            ui.markdown(
+                """
+                This app simulates the outcome of a clinical trial in oncology using the framework of ... Parameters can be set below. When a parameter is changed, 
+                a new trial is automatically simulated. Note that the variance in the results is due to the stochastic nature of the simulation and increases 
+                with a smaller number of participants and a shorter duration of the trial. The results for Progression-free Survival (PFS), Expected Overall Survival (EOS), 
+                and Overall Survival (OS) are displayed in the Results tab. The goal of this application is to demonstrate the impact of different parametrizations on the
+                endpoints. For more detailed information, please refer to ... . The code is open-source and available on GitHub.
+                """
+            )
 
-            h_death_t=input.h_death_treatment(),
-            h_death_c=input.h_death_control(), 
+    with ui.accordion_panel("Parametrization"):  
 
-            h_death_given_progression_t=input.h_death_given_progression_treatment(),
-            h_death_given_progression_c=input.h_death_given_progression_control(),
+        with ui.layout_columns(col_widths={"sm": 6, "md": (6, 6)}):
+            
+            with ui.div(class_='mx-auto my-auto'):
+                ui.tags.img(src=link_mc, width="100%")
 
-            h_death_given_censor_t=input.h_death_given_censor_treatment(),
-            h_death_given_censor_c=input.h_death_given_censor_control(),
+            with ui.div():
+                with ui.layout_column_wrap(width=1/3, height='15px'):
+                    ''
+                    'Treatment Arm'
+                    'Control Arm'
+                with ui.layout_column_wrap(width=1/3):
+                    '$$P_{P|NP}$$'
+                    ui.input_slider('p_progression_treatment', None,  MIN_SLIDER, MAX_SLIDER, DEFAULT_H, step=0.025)
+                    ui.input_slider('p_progression_control', None,  MIN_SLIDER, MAX_SLIDER, DEFAULT_H, step=0.025)
+                    '$$P_{C|NP}$$'
+                    ui.input_slider('p_censor_treatment', None,  MIN_SLIDER, MAX_SLIDER, DEFAULT_H, step=0.025)
+                    ui.input_slider('p_censor_control', None,  MIN_SLIDER, MAX_SLIDER, DEFAULT_H, step=0.025)
+                    '$$P_{D|NP}$$'
+                    ui.input_slider('p_death_treatment', None,  MIN_SLIDER, MAX_SLIDER, DEFAULT_H, step=0.025)
+                    ui.input_slider('p_death_control', None,  MIN_SLIDER, MAX_SLIDER, DEFAULT_H, step=0.025)
+                    '$$P_{D|P}$$'
+                    ui.input_slider('p_death_given_progression_treatment', None,  MIN_SLIDER, 0.9, DEFAULT_H + 0.1, step=0.025)
+                    ui.input_slider('p_death_given_progression_control', None,  MIN_SLIDER, 0.9, DEFAULT_H + 0.1, step=0.025)
+                    '$$P_{D|C}$$'
+                    ui.input_slider('p_death_given_censor_treatment', None,  MIN_SLIDER, 0.9, DEFAULT_H, step=0.025)
+                    ui.input_slider('p_death_given_censor_control', None,  MIN_SLIDER, 0.9, DEFAULT_H, step=0.025)
 
-            h_progression_t=input.h_progression_treatment(),
-            h_progression_c=input.h_progression_control(),
+        with ui.layout_columns(width=1/4):
 
-            h_censor_t=input.h_censor_treatment(),
-            h_censor_c=input.h_censor_control(),
-        )
+            ui.input_slider('n', 'Participants per Arm', 100, 100000, 10000, step=100)
+            ui.input_slider('duration', 'Duration of Trial', 5, 50, 20, step=5)
 
-    @render.text
-    def hazard_ratio_os():
-        return round(get_hazard_ratio_os(simulation_results()), 2)
+    with ui.accordion_panel("Results"):
+        with ui.layout_columns(width=1/3):
+            with ui.card():
+                ui.h5('Progression-free Survival')
+                @render.text
+                def hazard_ratio_pfs():
+                    return f'Hazard Ratio: {round(get_hazard_ratio_pfs(simulation_results()), 2)}'
+                
+                @render.plot(height=300)
+                def kaplan_meier_plot_pfs():
+                    return get_plot_pfs(simulation_results())
+                
+            with ui.card():
+                ui.h5('Expected Overall Survival')
+                @render.text
+                def hazard_ratio_eos():
+                    return f'Hazard Ratio: {round(get_hazard_ratio_eos(simulation_results()), 2)}'
+                
+                @render.plot(height=300)
+                def kaplan_meier_plot_eos():
+                    return get_plot_eos(simulation_results())
 
-    @render.text
-    def hazard_ratio_pfs():
-        return round(get_hazard_ratio_pfs(simulation_results()), 2)
-
-    @render.plot
-    def kaplan_meier_plot():
-        return get_plot(simulation_results())
-
-    @render.plot
-    def kaplan_meier_plot_pfs():
-        return get_plot_pfs(simulation_results())
-
-    @render.plot
-    def kaplan_meier_plot_os():
-        return get_plot_os(simulation_results())
-
-    @render.image
-    def formula():
-        img: ImgData = {"src":  os.path.join(DIR, "img/math_ex.png"), "width": "90%"}
-        return img
+            with ui.card():
+                ui.h5('Overall Survival')
+                @render.text
+                def hazard_ratio_os():
+                    return f'Hazard Ratio: {round(get_hazard_ratio_os(simulation_results()), 2)}'
+                
+                @render.plot(height=300)
+                def kaplan_meier_plot_os():
+                    return get_plot_os(simulation_results())
+                
+        ui.input_action_button('btn_refresh', 'Simulate new Trial', style='width: 250px; height: 50px; vertical-align: middle', icon=icon_svg('arrow-rotate-right'), class_='btn-primary')
 
 
+@reactive.Calc
+def simulation_results():
 
-app = App(app_ui, server)
+    click=input.btn_refresh(),
+
+    return simulate_trial(
+        n=input.n(),
+        duration=input.duration(),
+
+        p_death_t=input.p_death_treatment(),
+        p_death_c=input.p_death_control(), 
+
+        p_death_given_progression_t=input.p_death_given_progression_treatment(),
+        p_death_given_progression_c=input.p_death_given_progression_control(),
+
+        p_death_given_censor_t=input.p_death_given_censor_treatment(),
+        p_death_given_censor_c=input.p_death_given_censor_control(),
+
+        p_progression_t=input.p_progression_treatment(),
+        p_progression_c=input.p_progression_control(),
+
+        p_censor_t=input.p_censor_treatment(),
+        p_censor_c=input.p_censor_control(),
+    )
+
+
+
+

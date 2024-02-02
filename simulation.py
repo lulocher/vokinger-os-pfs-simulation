@@ -5,13 +5,29 @@ import pandas as pd
 from lifelines import CoxPHFitter, KaplanMeierFitter
 import matplotlib.pyplot as plt
 
+NO_PROGRESSION = 'no progression'
+PROGRESSED = 'progressed'
+CENSORED = 'censored'
+DEAD = 'dead'
+
+
 class StudyParticipant:
 
     def __init__(self):
         self.progress_time = None
         self.death_time = None
         self.censor_time = None
+        self.state = NO_PROGRESSION
     
+    def update_state(self, state, t):
+        self.state = state
+        if state == PROGRESSED:
+            self.progress(t)
+        elif state == CENSORED:
+            self.censor(t)
+        elif state == DEAD:
+            self.die(t)
+
     def progress(self, t):
         self.progress_time = t
 
@@ -25,21 +41,22 @@ class StudyParticipant:
 class Study:
 
     def __init__(
-            self, n, 
-            h_progression_treatment, h_death_treatment, h_censor_treatment,  h_death_given_progression_treatment, h_death_given_censor_treatment,
-            h_progression_control, h_death_control, h_censor_control, h_death_given_progression_control, h_death_given_censor_control
+            self, n, duration,
+            p_progression_treatment, p_death_treatment, p_censor_treatment,  p_death_given_progression_treatment, p_death_given_censor_treatment,
+            p_progression_control, p_death_control, p_censor_control, p_death_given_progression_control, p_death_given_censor_control
             ):
         self.t = 0
-        self.h_progression_t = h_progression_treatment
-        self.h_death_t = h_death_treatment
-        self.h_censor_t = h_censor_treatment
-        self.h_death_given_progression_t = h_death_given_progression_treatment
-        self.h_death_given_censor_t = h_death_given_censor_treatment
-        self.h_progression_c = h_progression_control
-        self.h_death_c = h_death_control
-        self.h_censor_c = h_censor_control
-        self.h_death_given_progression_c = h_death_given_progression_control
-        self.h_death_given_censor_c = h_death_given_censor_control
+        self.duration = duration
+        self.p_progression_t = p_progression_treatment
+        self.p_death_t = p_death_treatment
+        self.p_censor_t = p_censor_treatment
+        self.p_death_given_progression_t = p_death_given_progression_treatment
+        self.p_death_given_censor_t = p_death_given_censor_treatment
+        self.p_progression_c = p_progression_control
+        self.p_death_c = p_death_control
+        self.p_censor_c = p_censor_control
+        self.p_death_given_progression_c = p_death_given_progression_control
+        self.p_death_given_censor_c = p_death_given_censor_control
 
         self.treatment_group = [StudyParticipant() for x in range(n)]
         self.control_group = [StudyParticipant() for x in range(n)]
@@ -52,6 +69,9 @@ class Study:
         return self.control_group
     
     def check_complete(self):
+        if self.t >= self.duration:
+            return True
+
         for participant in self.treatment_group + self.control_group:
             if not participant.death_time:
                 return False
@@ -62,61 +82,48 @@ class Study:
 
         self.t += 1
 
-        def draw_events(t, participant, h_p, h_d, h_c, h_d_g_p, h_d_g_c):
-            has_progression = False
-            has_death = False 
-            has_censor = False
+        def draw_events(t, participant, p_p, p_d, p_c, p_d_g_p, p_d_g_c):
 
             if participant.death_time:
                 return
             
             if participant.censor_time: 
-                has_death = random.choices([True, False], weights = [h_d_g_c, 1-h_d_g_c], k=1)[0]
+                state = random.choices([DEAD, CENSORED], weights = [p_d_g_c, 1-p_d_g_c], k=1)[0]
 
             elif participant.progress_time:
-                has_death = random.choices([True, False], weights = [h_d_g_p, 1-h_d_g_p], k=1)[0]
+                state = random.choices([DEAD, PROGRESSED], weights = [p_d_g_p, 1-p_d_g_p], k=1)[0]
 
             else:
-                has_progression = random.choices([True, False], weights = [h_p, 1-h_p], k=1)[0]
-                has_death = random.choices([True, False], weights = [h_d, 1-h_d], k=1)[0]
-                has_censor = random.choices([True, False], weights = [h_c, 1-h_c], k=1)[0]
+                state = random.choices([DEAD, PROGRESSED, CENSORED, NO_PROGRESSION], weights = [p_d, p_p, p_c, 1-p_d-p_p-p_c], k=1)[0]
 
-            if has_death:
-                participant.die(t)
-                return
-
-            if has_censor:
-                participant.censor(t)
-                return
-
-            if has_progression:
-                participant.progress(t)
-
+            if state != participant.state:
+                participant.update_state(state, t)
             
         for participant in self.treatment_group:
-            draw_events(self.t, participant, self.h_progression_t, self.h_death_t, self.h_censor_t, self.h_death_given_progression_t, self.h_death_given_censor_t)
+            draw_events(self.t, participant, self.p_progression_t, self.p_death_t, self.p_censor_t, self.p_death_given_progression_t, self.p_death_given_censor_t)
         
         for participant in self.control_group:
-            draw_events(self.t, participant, self.h_progression_c, self.h_death_c, self.h_censor_c, self.h_death_given_progression_c, self.h_death_given_censor_c)
+            draw_events(self.t, participant, self.p_progression_c, self.p_death_c, self.p_censor_c, self.p_death_given_progression_c, self.p_death_given_censor_c)
 
         self.complete = self.check_complete()
 
 
 
-def simulate_trial(n, h_progression_t, h_death_t, h_censor_t, h_death_given_progression_t, h_death_given_censor_t, h_progression_c, h_death_c, h_censor_c, h_death_given_progression_c, h_death_given_censor_c, plot=False):
+def simulate_trial(n, duration, p_progression_t, p_death_t, p_censor_t, p_death_given_progression_t, p_death_given_censor_t, p_progression_c, p_death_c, p_censor_c, p_death_given_progression_c, p_death_given_censor_c):
     
     study = Study(
         n=n,
-        h_progression_treatment=h_progression_t,
-        h_death_treatment=h_death_t,
-        h_censor_treatment=h_censor_t,
-        h_death_given_progression_treatment=h_death_given_progression_t,
-        h_death_given_censor_treatment=h_death_given_censor_t,
-        h_progression_control=h_progression_c,
-        h_death_control=h_death_c,
-        h_censor_control=h_censor_c,
-        h_death_given_progression_control=h_death_given_progression_c,
-        h_death_given_censor_control = h_death_given_censor_c
+        duration=duration,
+        p_progression_treatment=p_progression_t,
+        p_death_treatment=p_death_t,
+        p_censor_treatment=p_censor_t,
+        p_death_given_progression_treatment=p_death_given_progression_t,
+        p_death_given_censor_treatment=p_death_given_censor_t,
+        p_progression_control=p_progression_c,
+        p_death_control=p_death_c,
+        p_censor_control=p_censor_c,
+        p_death_given_progression_control=p_death_given_progression_c,
+        p_death_given_censor_control = p_death_given_censor_c
     )
 
     while not study.complete:
@@ -130,6 +137,7 @@ def simulate_trial(n, h_progression_t, h_death_t, h_censor_t, h_death_given_prog
         't_censor': participant.censor_time,
         } for id, participant in enumerate(study.get_treatment_group())
     ]
+
     data_control = [{
         'participant': f'c_{id}', 
         'group': 0, 
@@ -143,11 +151,33 @@ def simulate_trial(n, h_progression_t, h_death_t, h_censor_t, h_death_given_prog
 
     df = pd.DataFrame(data_all)
 
-    df['os_event_time'] = df['t_death']
-    df['has_os_event'] = 1
+    df['duration'] = duration
 
-    df['pfs_event_time'] = df['t_censor'].combine_first(df['t_progression']).combine_first(df['t_death'])
-    df['has_pfs_event'] = df['t_censor'].apply(lambda x: 0 if pd.notna(x) else 1)
+    df['pfs_event_time'] = df['t_censor'].combine_first(df['t_progression']).combine_first(df['t_death']).combine_first(df['duration'])
+    df['has_pfs_event'] = df.apply(lambda x: 0 if pd.notna(x['t_censor']) or (pd.isna(x['t_censor']) and pd.isna(x['t_progression']) and pd.isna(x['t_death'])) else 1, axis=1)
+
+    df['os_event_time'] = df['t_death'].combine_first(df['duration'])
+    df['has_os_event'] = df['t_death'].apply(lambda x: 1 if pd.notna(x) else 0)
+
+    def get_estimated_post_probabilities(df, time_col):
+        df_affected = df[df[time_col].notna()]
+        n_death = df_affected['has_os_event'].sum()
+        df_affected['post_periods'] = df_affected.apply(lambda x: x['t_death'] - x[time_col] if pd.notna(x['t_death']) else duration - x[time_col], axis=1)
+        
+        p_post = n_death / df_affected['post_periods'].sum()
+
+        return p_post
+
+    est_p_death_p_t = get_estimated_post_probabilities(df[df['group'] == 1], 't_progression')
+    est_p_death_p_c = get_estimated_post_probabilities(df[df['group'] == 0], 't_progression')
+
+    est_p_death_c_t = get_estimated_post_probabilities(df[df['group'] == 1], 't_censor')
+    est_p_death_c_c = get_estimated_post_probabilities(df[df['group'] == 0], 't_censor')
+
+    df[['est_p_death_p', 'est_p_death_c']]= df['group'].apply(lambda x: [est_p_death_p_t, est_p_death_c_t] if x == 1 else [est_p_death_p_c, est_p_death_c_c]).to_list()
+
+    df['eos_event_time'] = df['t_death'].combine_first(df['t_progression'] + 1 / df['est_p_death_p']).combine_first(df['t_censor'] + 1 / df['est_p_death_c']).combine_first(df['duration'])
+    df['has_eos_event'] = df.apply(lambda x: 1 if pd.notna(x['t_death']) or pd.notna(x['t_progression']) or pd.notna(x['t_censor']) else 0, axis=1)
 
     return df
 
@@ -171,21 +201,27 @@ def get_hazard_ratio_os(df):
 
     return hr_os
 
+def get_hazard_ratio_eos(df):
+    
+    hr_eos = get_hr(df, 'eos_event_time', 'has_eos_event', 'group')
+
+    return hr_eos
+
 def plot_kaplan_meier(data, time_col, event_col, group_col):
 
-        kmf = KaplanMeierFitter()
+    kmf = KaplanMeierFitter()
 
-        data_treated = data[data[group_col] == 1]
-        data_control = data[data[group_col] == 0]
+    data_treated = data[data[group_col] == 1]
+    data_control = data[data[group_col] == 0]
 
-        kmf.fit(data_treated[time_col], data_treated[event_col], label='Treated')
-        kmf.plot(ci_show=False)
-        kmf.fit(data_control[time_col], data_control[event_col], label='Control')
-        kmf.plot(ci_show=False)
+    kmf.fit(data_treated[time_col], data_treated[event_col], label='Treated')
+    kmf.plot(ci_show=False)
+    kmf.fit(data_control[time_col], data_control[event_col], label='Control')
+    kmf.plot(ci_show=False)
 
-def get_plot(df, hr_pfs, hr_os):
+def get_plot(df, hr_pfs, hr_os, hr_eos):
     
-    figure = plt.figure(figsize=(15, 8))
+    figure = plt.figure(figsize=(6, 4))
 
     plt.subplot(1, 2, 1)
     plt.title(f'Progression-free Survival\n(Hazard Ratio: {round(hr_pfs, 2)})')
@@ -206,5 +242,11 @@ def get_plot_pfs(df):
 def get_plot_os(df):
     figure = plt.figure()
     plot_kaplan_meier(df, 'os_event_time', 'has_os_event', 'group')
+
+    return figure
+
+def get_plot_eos(df):
+    figure = plt.figure()
+    plot_kaplan_meier(df, 'eos_event_time', 'has_eos_event', 'group')
 
     return figure
