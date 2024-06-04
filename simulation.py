@@ -1,9 +1,7 @@
 import matplotlib.pyplot as plt
-import numpy as np
 import random
 import pandas as pd
 from lifelines import CoxPHFitter, KaplanMeierFitter
-import matplotlib.pyplot as plt
 
 NO_PROGRESSION = 'no progression'
 PROGRESSED = 'progressed'
@@ -219,7 +217,7 @@ def plot_kaplan_meier(data, time_col, event_col, group_col):
     kmf.fit(data_control[time_col], data_control[event_col], label='Control')
     kmf.plot(ci_show=False)
 
-def get_plot(df, hr_pfs, hr_os, hr_eos):
+def get_plot(df, hr_pfs, hr_os):
     
     figure = plt.figure(figsize=(6, 4))
 

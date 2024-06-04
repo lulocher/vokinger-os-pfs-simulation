@@ -1,8 +1,8 @@
-,n,h_progression_t,h_progression_c,h_death_t,h_death_c,h_censor_t,h_censor_c,h_death_given_progression_t,h_death_given_progression_c,h_death_given_censor_t,h_death_given_censor_c
-1_progression_driven_low_translation,200000,0.075,0.15,0.15,0.15,0.0,0.0,0.25,0.25,0.15,0.15
-2_progression_driven_high_translation,200000,0.075,0.15,0.15,0.15,0.0,0.0,0.75,0.75,0.15,0.15
-3_progression_driven_differential_translation,200000,0.075,0.15,0.15,0.15,0.0,0.0,0.75,0.25,0.15,0.15
-4_censoring_driven_negative_small_difference,200000,0.09999999999999999,0.15,0.09999999999999999,0.15,0.1,0.0,0.2,0.2,0.19999999999999998,0.15
-5_censoring_driven_negative_large_difference,200000,0.09999999999999999,0.15,0.09999999999999999,0.15,0.1,0.0,0.2,0.2,0.3,0.15
-6_censoring_driven_positive_large_difference,200000,0.15,0.2,0.15,0.2,0.0,0.1,0.2,0.2,0.15,0.075
-7_combined,200000,0.075,0.15,0.09999999999999999,0.15,0.1,0.0,0.75,0.2,0.3,0.15
+,n,duration,p_progression_t,p_progression_c,p_death_t,p_death_c,p_censor_t,p_censor_c,p_death_given_progression_t,p_death_given_progression_c,p_death_given_censor_t,p_death_given_censor_c
+1_progression_driven_low_translation,200000,1000,0.075,0.15,0.15,0.15,0.0,0.0,0.25,0.25,0.15,0.15
+2_progression_driven_high_translation,200000,1000,0.075,0.15,0.15,0.15,0.0,0.0,0.75,0.75,0.15,0.15
+3_post_progression_death_driven,200000,1000,0.15,0.15,0.15,0.15,0.0,0.0,0.2,0.35,0.15,0.15
+4_pre_progression_death_driven,200000,1000,0.15,0.15,0.075,0.15,0.0,0.0,0.25,0.25,0.15,0.15
+5_censoring_driven_treat_low,200000,1000,0.075,0.15,0.075,0.15,0.1,0.05,0.25,0.25,0.2,0.15
+6_censoring_driven_treat_high,200000,1000,0.11249999999999999,0.15,0.11249999999999999,0.15,0.1,0.05,0.35,0.35,0.44999999999999996,0.15
+7_censoring_driven_control_high,200000,1000,0.11249999999999999,0.15,0.11249999999999999,0.15,0.05,0.1,0.35,0.35,0.15,0.44999999999999996

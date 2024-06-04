@@ -1,15 +1,273 @@
-from functools import partial
+import random
 from pathlib import Path
-from faicons import icon_svg
 
-from shiny.ui import output_image
+import matplotlib.pyplot as plt
+import pandas as pd
+from lifelines import CoxPHFitter, KaplanMeierFitter
+from faicons import icon_svg
 from shiny import render, reactive
 from shiny.express import ui, input, render
-from shiny.types import ImgData
 
-from simulation import simulate_trial, get_plot_pfs, get_plot_os, get_plot_eos, get_hazard_ratio_pfs, get_hazard_ratio_os, get_hazard_ratio_eos
+###
+# General setup and helper functions
+###
+
+NO_PROGRESSION = 'no progression'
+PROGRESSED = 'progressed'
+CENSORED = 'censored'
+DEAD = 'dead'
+
+
+class StudyParticipant:
+    """
+    Class representing a participant in a clinical trial
+    """
+    def __init__(self):
+        self.progress_time = None
+        self.death_time = None
+        self.censor_time = None
+        self.state = NO_PROGRESSION
+    
+    def update_state(self, state, t):
+        self.state = state
+        if state == PROGRESSED:
+            self.progress(t)
+        elif state == CENSORED:
+            self.censor(t)
+        elif state == DEAD:
+            self.die(t)
+
+    def progress(self, t):
+        self.progress_time = t
+
+    def die(self, t):
+        self.death_time = t
+
+    def censor(self, t):
+        self.censor_time = t
+
+
+class Study:
+    """
+    Class representing a clinical trial
+    """
+
+    def __init__(
+            self, n, duration,
+            p_progression_treatment, p_death_treatment, p_censor_treatment,  p_death_given_progression_treatment, p_death_given_censor_treatment,
+            p_progression_control, p_death_control, p_censor_control, p_death_given_progression_control, p_death_given_censor_control
+            ):
+        self.t = 0
+        self.duration = duration
+        self.p_progression_t = p_progression_treatment
+        self.p_death_t = p_death_treatment
+        self.p_censor_t = p_censor_treatment
+        self.p_death_given_progression_t = p_death_given_progression_treatment
+        self.p_death_given_censor_t = p_death_given_censor_treatment
+        self.p_progression_c = p_progression_control
+        self.p_death_c = p_death_control
+        self.p_censor_c = p_censor_control
+        self.p_death_given_progression_c = p_death_given_progression_control
+        self.p_death_given_censor_c = p_death_given_censor_control
+
+        self.treatment_group = [StudyParticipant() for x in range(n)]
+        self.control_group = [StudyParticipant() for x in range(n)]
+        self.complete = False
+
+    def get_treatment_group(self):
+        return self.treatment_group
+    
+    def get_control_group(self):
+        return self.control_group
+    
+    def check_complete(self):
+        if self.t >= self.duration:
+            return True
+
+        for participant in self.treatment_group + self.control_group:
+            if not participant.death_time:
+                return False
+
+        return True
+
+    def simulate_period(self):
+
+        self.t += 1
+
+        def draw_events(t, participant, p_p, p_d, p_c, p_d_g_p, p_d_g_c):
+
+            if participant.death_time:
+                return
+            
+            if participant.censor_time: 
+                state = random.choices([DEAD, CENSORED], weights = [p_d_g_c, 1-p_d_g_c], k=1)[0]
+
+            elif participant.progress_time:
+                state = random.choices([DEAD, PROGRESSED], weights = [p_d_g_p, 1-p_d_g_p], k=1)[0]
+
+            else:
+                state = random.choices([DEAD, PROGRESSED, CENSORED, NO_PROGRESSION], weights = [p_d, p_p, p_c, 1-p_d-p_p-p_c], k=1)[0]
+
+            if state != participant.state:
+                participant.update_state(state, t)
+            
+        for participant in self.treatment_group:
+            draw_events(self.t, participant, self.p_progression_t, self.p_death_t, self.p_censor_t, self.p_death_given_progression_t, self.p_death_given_censor_t)
+        
+        for participant in self.control_group:
+            draw_events(self.t, participant, self.p_progression_c, self.p_death_c, self.p_censor_c, self.p_death_given_progression_c, self.p_death_given_censor_c)
+
+        self.complete = self.check_complete()
+
+
+
+def simulate_trial(n, duration, p_progression_t, p_death_t, p_censor_t, p_death_given_progression_t, p_death_given_censor_t, p_progression_c, p_death_c, p_censor_c, p_death_given_progression_c, p_death_given_censor_c):
+    study = Study(
+        n=n,
+        duration=duration,
+        p_progression_treatment=p_progression_t,
+        p_death_treatment=p_death_t,
+        p_censor_treatment=p_censor_t,
+        p_death_given_progression_treatment=p_death_given_progression_t,
+        p_death_given_censor_treatment=p_death_given_censor_t,
+        p_progression_control=p_progression_c,
+        p_death_control=p_death_c,
+        p_censor_control=p_censor_c,
+        p_death_given_progression_control=p_death_given_progression_c,
+        p_death_given_censor_control = p_death_given_censor_c
+    )
+
+    while not study.complete:
+        study.simulate_period()
+
+    data_treatment = [{
+        'participant': f't_{id}', 
+        'group': 1, 
+        't_progression': participant.progress_time,
+        't_death': participant.death_time,
+        't_censor': participant.censor_time,
+        } for id, participant in enumerate(study.get_treatment_group())
+    ]
+
+    data_control = [{
+        'participant': f'c_{id}', 
+        'group': 0, 
+        't_progression': participant.progress_time,
+        't_death': participant.death_time,
+        't_censor': participant.censor_time,
+        } for id, participant in enumerate(study.get_control_group())
+    ]
+
+    data_all = data_treatment + data_control
+
+    df = pd.DataFrame(data_all)
+
+    df['duration'] = duration
+
+    df['pfs_event_time'] = df['t_censor'].combine_first(df['t_progression']).combine_first(df['t_death']).combine_first(df['duration'])
+    df['has_pfs_event'] = df.apply(lambda x: 0 if pd.notna(x['t_censor']) or (pd.isna(x['t_censor']) and pd.isna(x['t_progression']) and pd.isna(x['t_death'])) else 1, axis=1)
+
+    df['os_event_time'] = df['t_death'].combine_first(df['duration'])
+    df['has_os_event'] = df['t_death'].apply(lambda x: 1 if pd.notna(x) else 0)
+
+    def get_estimated_post_probabilities(df, time_col):
+        df_affected = df[df[time_col].notna()]
+        n_death = df_affected['has_os_event'].sum()
+        df_affected['post_periods'] = df_affected.apply(lambda x: x['t_death'] - x[time_col] if pd.notna(x['t_death']) else duration - x[time_col], axis=1)
+        
+        p_post = n_death / df_affected['post_periods'].sum()
+
+        return p_post
+
+    est_p_death_p_t = get_estimated_post_probabilities(df[df['group'] == 1], 't_progression')
+    est_p_death_p_c = get_estimated_post_probabilities(df[df['group'] == 0], 't_progression')
+
+    est_p_death_c_t = get_estimated_post_probabilities(df[df['group'] == 1], 't_censor')
+    est_p_death_c_c = get_estimated_post_probabilities(df[df['group'] == 0], 't_censor')
+
+    df[['est_p_death_p', 'est_p_death_c']]= df['group'].apply(lambda x: [est_p_death_p_t, est_p_death_c_t] if x == 1 else [est_p_death_p_c, est_p_death_c_c]).to_list()
+
+    df['eos_event_time'] = df['t_death'].combine_first(df['t_progression'] + 1 / df['est_p_death_p']).combine_first(df['t_censor'] + 1 / df['est_p_death_c']).combine_first(df['duration'])
+    df['has_eos_event'] = df.apply(lambda x: 1 if pd.notna(x['t_death']) or pd.notna(x['t_progression']) or pd.notna(x['t_censor']) else 0, axis=1)
+
+    return df
+
+def get_hr(data, time_col, event_col, group_col):
+        cph = CoxPHFitter()
+        data_fit = data[[time_col, event_col, group_col]]
+        cph.fit(data_fit, duration_col=time_col, event_col=event_col)
+        hr = float(cph.hazard_ratios_.iloc[0])  
+
+        return hr
+
+def get_hazard_ratio_pfs(df):
+
+    hr_pfs = get_hr(df, 'pfs_event_time', 'has_pfs_event', 'group')
+
+    return hr_pfs
+
+def get_hazard_ratio_os(df):
+    
+    hr_os = get_hr(df, 'os_event_time', 'has_os_event', 'group')
+
+    return hr_os
+
+def get_hazard_ratio_eos(df):
+    
+    hr_eos = get_hr(df, 'eos_event_time', 'has_eos_event', 'group')
+
+    return hr_eos
+
+def plot_kaplan_meier(data, time_col, event_col, group_col):
+
+    kmf = KaplanMeierFitter()
+
+    data_treated = data[data[group_col] == 1]
+    data_control = data[data[group_col] == 0]
+
+    kmf.fit(data_treated[time_col], data_treated[event_col], label='Treated')
+    kmf.plot(ci_show=False)
+    kmf.fit(data_control[time_col], data_control[event_col], label='Control')
+    kmf.plot(ci_show=False)
+
+def get_plot(df, hr_pfs, hr_os):
+    
+    figure = plt.figure(figsize=(6, 4))
+
+    plt.subplot(1, 2, 1)
+    plt.title(f'Progression-free Survival\n(Hazard Ratio: {round(hr_pfs, 2)})')
+    plot_kaplan_meier(df, 'pfs_event_time', 'has_pfs_event', 'group')
+
+    plt.subplot(1, 2, 2)
+    plt.title(f'Overall Survival\n(Hazard Ratio: {round(hr_os, 2)})')
+    plot_kaplan_meier(df, 'os_event_time', 'has_os_event', 'group')
+        
+    return figure
+
+def get_plot_pfs(df):
+    figure = plt.figure()
+    plot_kaplan_meier(df, 'pfs_event_time', 'has_pfs_event', 'group')
+
+    return figure
+
+def get_plot_os(df):
+    figure = plt.figure()
+    plot_kaplan_meier(df, 'os_event_time', 'has_os_event', 'group')
+
+    return figure
+
+def get_plot_eos(df):
+    figure = plt.figure()
+    plot_kaplan_meier(df, 'eos_event_time', 'has_eos_event', 'group')
+
+    return figure
+
+###
+# Shiny application
+###
 
 link_mc = "https://i.ibb.co/Bf7XHG4/markov-chain.png"
+link_repo = "https://github.com/lulocher/vokinger-os-pfs-simulation"
 
 N = 20000
 DEFAULT_H = 0.1
@@ -25,19 +283,19 @@ ui.tags.script(
 ui.tags.script("if (window.MathJax) MathJax.Hub.Queue(['Typeset', MathJax.Hub]);")
 
 with ui.div(class_="py-5 text-center mx-0"):
-    ui.h3("Clinical Trial Outcome Simulator")
+    ui.h3("Clinical Trial Simulator")
 
 ui.accordion()
 with ui.accordion(id="acc", open=["Introduction", "Parametrization", "Results"]):  
     with ui.accordion_panel("Introduction"):
         with ui.div(class_="py-4 mx-auto text-left"):
             ui.markdown(
-                """
-                This app simulates the outcome of a clinical trial in oncology using the framework of ... Parameters can be set below. When a parameter is changed, 
-                a new trial is automatically simulated. Note that the variance in the results is due to the stochastic nature of the simulation and increases 
-                with a smaller number of participants and a shorter duration of the trial. The results for Progression-free Survival (PFS), Expected Overall Survival (EOS), 
-                and Overall Survival (OS) are displayed in the Results tab. The goal of this application is to demonstrate the impact of different parametrizations on the
-                endpoints. For more detailed information, please refer to ... . The code is open-source and available on GitHub.
+                f"""
+                This application simulates the outcome of a clinical trial in oncology using the framework presented in Locher et al. (2024). Parameters for the simulation can be set below. When a parameter is changed, 
+                a new trial is automatically simulated. Note that the variance in the results is due to the stochastic nature of the simulation and decreases with a larger number of participants and longer duration. 
+                The results for Progression-free Survival (PFS), Expected Overall Survival (EOS), and Overall Survival (OS) are displayed in the Results tab. 
+                The goal of this application is to allow users to interact with the simulation and observe the impact of different parameters on the trial outcome.
+                For more detailed information, please refer to Locher et al. (2024). The code is open-source and available on [GitHub]({link_repo}).
                 """
             )
 
@@ -45,30 +303,51 @@ with ui.accordion(id="acc", open=["Introduction", "Parametrization", "Results"])
 
         with ui.layout_columns(col_widths={"sm": 6, "md": (6, 6)}):
             
-            with ui.div(class_='mx-auto my-auto'):
+            with ui.div(class_='mx-auto'):
                 ui.tags.img(src=link_mc, width="100%")
 
             with ui.div():
                 with ui.layout_column_wrap(width=1/3, height='15px'):
                     ''
-                    'Treatment Arm'
-                    'Control Arm'
+                    'Treatment arm'
+                    'Control arm'
                 with ui.layout_column_wrap(width=1/3):
-                    '$$P_{P|NP}$$'
+                    with ui.tooltip(placement="top"):
+                        '$$P_{P|NP}$$'
+                        'Probability of transitioning from "no progression" to "progression"'
                     ui.input_slider('p_progression_treatment', None,  MIN_SLIDER, MAX_SLIDER, DEFAULT_H, step=0.025)
                     ui.input_slider('p_progression_control', None,  MIN_SLIDER, MAX_SLIDER, DEFAULT_H, step=0.025)
-                    '$$P_{C|NP}$$'
-                    ui.input_slider('p_censor_treatment', None,  MIN_SLIDER, MAX_SLIDER, DEFAULT_H, step=0.025)
-                    ui.input_slider('p_censor_control', None,  MIN_SLIDER, MAX_SLIDER, DEFAULT_H, step=0.025)
-                    '$$P_{D|NP}$$'
+
+                    with ui.tooltip(placement="top"):
+                        '$$P_{D|NP}$$'
+                        'Probability of transitioning from "no progression" to "dead"'
                     ui.input_slider('p_death_treatment', None,  MIN_SLIDER, MAX_SLIDER, DEFAULT_H, step=0.025)
                     ui.input_slider('p_death_control', None,  MIN_SLIDER, MAX_SLIDER, DEFAULT_H, step=0.025)
-                    '$$P_{D|P}$$'
+
+                    with ui.tooltip(placement="top"):
+                        '$$P_{D|P}$$'
+                        'Probability of transitioning from "progression" to "dead"'
                     ui.input_slider('p_death_given_progression_treatment', None,  MIN_SLIDER, 0.9, DEFAULT_H + 0.1, step=0.025)
                     ui.input_slider('p_death_given_progression_control', None,  MIN_SLIDER, 0.9, DEFAULT_H + 0.1, step=0.025)
-                    '$$P_{D|C}$$'
-                    ui.input_slider('p_death_given_censor_treatment', None,  MIN_SLIDER, 0.9, DEFAULT_H, step=0.025)
-                    ui.input_slider('p_death_given_censor_control', None,  MIN_SLIDER, 0.9, DEFAULT_H, step=0.025)
+
+                    ''
+                    ''
+                    ui.input_checkbox("show_censoring", "Allow for censoring", False)
+                    
+
+                with ui.panel_conditional('input.show_censoring'):
+                    with ui.layout_column_wrap(width=1/3):   
+                        with ui.tooltip(placement="top"):
+                            '$$P_{C|NP}$$'
+                            'Probability of transitioning from "no progression" to "censored"'
+                        ui.input_slider('p_censor_treatment', None,  MIN_SLIDER, MAX_SLIDER, 0, step=0.025)
+                        ui.input_slider('p_censor_control', None,  MIN_SLIDER, MAX_SLIDER, 0, step=0.025)
+
+                        with ui.tooltip(placement="top"):
+                            '$$P_{D|C}$$'
+                            'Probability of transitioning from "censored" to "dead"'
+                        ui.input_slider('p_death_given_censor_treatment', None,  MIN_SLIDER, 0.9, DEFAULT_H, step=0.025)
+                        ui.input_slider('p_death_given_censor_control', None,  MIN_SLIDER, 0.9, DEFAULT_H, step=0.025)
 
         with ui.layout_columns(width=1/4):
 
@@ -125,14 +404,14 @@ def simulation_results():
         p_death_given_progression_t=input.p_death_given_progression_treatment(),
         p_death_given_progression_c=input.p_death_given_progression_control(),
 
-        p_death_given_censor_t=input.p_death_given_censor_treatment(),
-        p_death_given_censor_c=input.p_death_given_censor_control(),
-
         p_progression_t=input.p_progression_treatment(),
         p_progression_c=input.p_progression_control(),
 
-        p_censor_t=input.p_censor_treatment(),
-        p_censor_c=input.p_censor_control(),
+        p_censor_t=input.p_censor_treatment() if input.show_censoring() else 0,
+        p_censor_c=input.p_censor_control() if input.show_censoring() else 0,
+
+        p_death_given_censor_t=input.p_death_given_censor_treatment() if input.show_censoring() else input.p_death_treatment(),
+        p_death_given_censor_c=input.p_death_given_censor_control() if input.show_censoring() else input.p_death_control()
     )
 
 

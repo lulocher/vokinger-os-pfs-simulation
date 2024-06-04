@@ -1,0 +1,5 @@
+matplotlib==3.8.0
+pandas==2.0.1
+lifelines==0.27.8
+shiny==0.7.0
+faicons==0.2.1
