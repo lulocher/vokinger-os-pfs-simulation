@@ -1,16 +1,7 @@
 import random
-from pathlib import Path
-
 import matplotlib.pyplot as plt
 import pandas as pd
 from lifelines import CoxPHFitter, KaplanMeierFitter
-from faicons import icon_svg
-from shiny import render, reactive
-from shiny.express import ui, input, render
-
-###
-# General setup and helper functions
-###
 
 NO_PROGRESSION = 'no progression'
 PROGRESSED = 'progressed'
@@ -91,7 +82,6 @@ class Study:
         return True
 
     def simulate_period(self):
-
         self.t += 1
 
         def draw_events(t, participant, p_p, p_d, p_c, p_d_g_p, p_d_g_c):
@@ -201,25 +191,16 @@ def get_hr(data, time_col, event_col, group_col):
         return hr
 
 def get_hazard_ratio_pfs(df):
-
     hr_pfs = get_hr(df, 'pfs_event_time', 'has_pfs_event', 'group')
 
     return hr_pfs
 
 def get_hazard_ratio_os(df):
-    
     hr_os = get_hr(df, 'os_event_time', 'has_os_event', 'group')
 
     return hr_os
 
-def get_hazard_ratio_eos(df):
-    
-    hr_eos = get_hr(df, 'eos_event_time', 'has_eos_event', 'group')
-
-    return hr_eos
-
 def plot_kaplan_meier(data, time_col, event_col, group_col):
-
     kmf = KaplanMeierFitter()
 
     data_treated = data[data[group_col] == 1]
@@ -231,189 +212,14 @@ def plot_kaplan_meier(data, time_col, event_col, group_col):
     kmf.plot(ci_show=False)
 
 def get_plot(df, hr_pfs, hr_os):
-    
-    figure = plt.figure(figsize=(6, 4))
+    figure = plt.figure(figsize=(8, 4))
 
     plt.subplot(1, 2, 1)
-    plt.title(f'Progression-free Survival\n(Hazard Ratio: {round(hr_pfs, 2)})')
+    plt.title(f'PFS\n(HR: {round(hr_pfs, 2)})')
     plot_kaplan_meier(df, 'pfs_event_time', 'has_pfs_event', 'group')
 
     plt.subplot(1, 2, 2)
-    plt.title(f'Overall Survival\n(Hazard Ratio: {round(hr_os, 2)})')
+    plt.title(f'OS\n(HR: {round(hr_os, 2)})')
     plot_kaplan_meier(df, 'os_event_time', 'has_os_event', 'group')
         
     return figure
-
-def get_plot_pfs(df):
-    figure = plt.figure()
-    plot_kaplan_meier(df, 'pfs_event_time', 'has_pfs_event', 'group')
-
-    return figure
-
-def get_plot_os(df):
-    figure = plt.figure()
-    plot_kaplan_meier(df, 'os_event_time', 'has_os_event', 'group')
-
-    return figure
-
-def get_plot_eos(df):
-    figure = plt.figure()
-    plot_kaplan_meier(df, 'eos_event_time', 'has_eos_event', 'group')
-
-    return figure
-
-###
-# Shiny application
-###
-
-link_mc = "https://i.ibb.co/Bf7XHG4/markov-chain.png"
-link_repo = "https://github.com/lulocher/vokinger-os-pfs-simulation"
-
-N = 20000
-DEFAULT_H = 0.1
-
-MIN_SLIDER = 0.0
-MAX_SLIDER = 0.3
-
-here = Path(__file__).parent
-
-ui.tags.script(
-    src="https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"
-)
-ui.tags.script("if (window.MathJax) MathJax.Hub.Queue(['Typeset', MathJax.Hub]);")
-
-with ui.div(class_="py-5 text-center mx-0"):
-    ui.h3("Clinical Trial Simulator")
-
-ui.accordion()
-with ui.accordion(id="acc", open=["Introduction", "Parametrization", "Results"]):  
-    with ui.accordion_panel("Introduction"):
-        with ui.div(class_="py-4 mx-auto text-left"):
-            ui.markdown(
-                f"""
-                This application simulates the outcome of a clinical trial in oncology using the framework presented in Locher et al. (2024). Parameters for the simulation can be set below. When a parameter is changed, 
-                a new trial is automatically simulated. Note that the variance in the results is due to the stochastic nature of the simulation and decreases with a larger number of participants and longer duration. 
-                The results for Progression-free Survival (PFS), Expected Overall Survival (EOS), and Overall Survival (OS) are displayed in the Results tab. 
-                The goal of this application is to allow users to interact with the simulation and observe the impact of different parameters on the trial outcome.
-                For more detailed information, please refer to Locher et al. (2024). The code is open-source and available on [GitHub]({link_repo}).
-                """
-            )
-
-    with ui.accordion_panel("Parametrization"):  
-
-        with ui.layout_columns(col_widths={"sm": 6, "md": (6, 6)}):
-            
-            with ui.div(class_='mx-auto'):
-                ui.tags.img(src=link_mc, width="100%")
-
-            with ui.div():
-                with ui.layout_column_wrap(width=1/3, height='15px'):
-                    ''
-                    'Treatment arm'
-                    'Control arm'
-                with ui.layout_column_wrap(width=1/3):
-                    with ui.tooltip(placement="top"):
-                        '$$P_{P|NP}$$'
-                        'Probability of transitioning from "no progression" to "progression"'
-                    ui.input_slider('p_progression_treatment', None,  MIN_SLIDER, MAX_SLIDER, DEFAULT_H, step=0.025)
-                    ui.input_slider('p_progression_control', None,  MIN_SLIDER, MAX_SLIDER, DEFAULT_H, step=0.025)
-
-                    with ui.tooltip(placement="top"):
-                        '$$P_{D|NP}$$'
-                        'Probability of transitioning from "no progression" to "dead"'
-                    ui.input_slider('p_death_treatment', None,  MIN_SLIDER, MAX_SLIDER, DEFAULT_H, step=0.025)
-                    ui.input_slider('p_death_control', None,  MIN_SLIDER, MAX_SLIDER, DEFAULT_H, step=0.025)
-
-                    with ui.tooltip(placement="top"):
-                        '$$P_{D|P}$$'
-                        'Probability of transitioning from "progression" to "dead"'
-                    ui.input_slider('p_death_given_progression_treatment', None,  MIN_SLIDER, 0.9, DEFAULT_H + 0.1, step=0.025)
-                    ui.input_slider('p_death_given_progression_control', None,  MIN_SLIDER, 0.9, DEFAULT_H + 0.1, step=0.025)
-
-                    ''
-                    ''
-                    ui.input_checkbox("show_censoring", "Allow for censoring", False)
-                    
-
-                with ui.panel_conditional('input.show_censoring'):
-                    with ui.layout_column_wrap(width=1/3):   
-                        with ui.tooltip(placement="top"):
-                            '$$P_{C|NP}$$'
-                            'Probability of transitioning from "no progression" to "censored"'
-                        ui.input_slider('p_censor_treatment', None,  MIN_SLIDER, MAX_SLIDER, 0, step=0.025)
-                        ui.input_slider('p_censor_control', None,  MIN_SLIDER, MAX_SLIDER, 0, step=0.025)
-
-                        with ui.tooltip(placement="top"):
-                            '$$P_{D|C}$$'
-                            'Probability of transitioning from "censored" to "dead"'
-                        ui.input_slider('p_death_given_censor_treatment', None,  MIN_SLIDER, 0.9, DEFAULT_H, step=0.025)
-                        ui.input_slider('p_death_given_censor_control', None,  MIN_SLIDER, 0.9, DEFAULT_H, step=0.025)
-
-        with ui.layout_columns(width=1/4):
-
-            ui.input_slider('n', 'Participants per Arm', 100, 100000, 10000, step=100)
-            ui.input_slider('duration', 'Duration of Trial', 5, 50, 20, step=5)
-
-    with ui.accordion_panel("Results"):
-        with ui.layout_columns(width=1/3):
-            with ui.card():
-                ui.h5('Progression-free Survival')
-                @render.text
-                def hazard_ratio_pfs():
-                    return f'Hazard Ratio: {round(get_hazard_ratio_pfs(simulation_results()), 2)}'
-                
-                @render.plot(height=300)
-                def kaplan_meier_plot_pfs():
-                    return get_plot_pfs(simulation_results())
-                
-            with ui.card():
-                ui.h5('Expected Overall Survival')
-                @render.text
-                def hazard_ratio_eos():
-                    return f'Hazard Ratio: {round(get_hazard_ratio_eos(simulation_results()), 2)}'
-                
-                @render.plot(height=300)
-                def kaplan_meier_plot_eos():
-                    return get_plot_eos(simulation_results())
-
-            with ui.card():
-                ui.h5('Overall Survival')
-                @render.text
-                def hazard_ratio_os():
-                    return f'Hazard Ratio: {round(get_hazard_ratio_os(simulation_results()), 2)}'
-                
-                @render.plot(height=300)
-                def kaplan_meier_plot_os():
-                    return get_plot_os(simulation_results())
-                
-        ui.input_action_button('btn_refresh', 'Simulate new Trial', style='width: 250px; height: 50px; vertical-align: middle', icon=icon_svg('arrow-rotate-right'), class_='btn-primary')
-
-
-@reactive.Calc
-def simulation_results():
-
-    click=input.btn_refresh(),
-
-    return simulate_trial(
-        n=input.n(),
-        duration=input.duration(),
-
-        p_death_t=input.p_death_treatment(),
-        p_death_c=input.p_death_control(), 
-
-        p_death_given_progression_t=input.p_death_given_progression_treatment(),
-        p_death_given_progression_c=input.p_death_given_progression_control(),
-
-        p_progression_t=input.p_progression_treatment(),
-        p_progression_c=input.p_progression_control(),
-
-        p_censor_t=input.p_censor_treatment() if input.show_censoring() else 0,
-        p_censor_c=input.p_censor_control() if input.show_censoring() else 0,
-
-        p_death_given_censor_t=input.p_death_given_censor_treatment() if input.show_censoring() else input.p_death_treatment(),
-        p_death_given_censor_c=input.p_death_given_censor_control() if input.show_censoring() else input.p_death_control()
-    )
-
-
-
-

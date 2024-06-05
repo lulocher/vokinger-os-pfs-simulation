@@ -1,16 +1,15 @@
-import matplotlib.pyplot as plt
 import os
 import pandas as pd
 
-from app import simulate_trial, get_hazard_ratio_pfs, get_hazard_ratio_os, get_plot
+from simulation import simulate_trial, get_hazard_ratio_pfs, get_hazard_ratio_os, get_plot
 
 path = os.path.dirname(__file__)
 
-N = 200000
-DURATION = 1000
+N = 250 * 1000
+DURATION = 20
 
-BASE_P_PROGRESSION = 0.15
-BASE_P_DEATH = 0.15
+BASE_P_PROGRESSION = 0.025
+BASE_P_DEATH = 0.025
 BASE_P_CENSOR = 0
 
                                                                        
@@ -24,8 +23,8 @@ settings = {
         'p_death_c': BASE_P_DEATH,
         'p_censor_t': BASE_P_CENSOR,
         'p_censor_c': BASE_P_CENSOR,
-        'p_death_given_progression_t': BASE_P_DEATH + 0.1,
-        'p_death_given_progression_c': BASE_P_DEATH + 0.1,
+        'p_death_given_progression_t': BASE_P_DEATH * 1.5,
+        'p_death_given_progression_c': BASE_P_DEATH * 1.5,
         'p_death_given_censor_t': BASE_P_DEATH,
         'p_death_given_censor_c': BASE_P_DEATH
     },
@@ -39,8 +38,8 @@ settings = {
         'p_death_c': BASE_P_DEATH,
         'p_censor_t': BASE_P_CENSOR,
         'p_censor_c': BASE_P_CENSOR,
-        'p_death_given_progression_t': BASE_P_DEATH + 0.6,
-        'p_death_given_progression_c': BASE_P_DEATH + 0.6,
+        'p_death_given_progression_t': BASE_P_DEATH * 4,
+        'p_death_given_progression_c': BASE_P_DEATH * 4,
         'p_death_given_censor_t': BASE_P_DEATH,
         'p_death_given_censor_c': BASE_P_DEATH
     },
@@ -53,8 +52,8 @@ settings = {
         'p_death_c': BASE_P_DEATH,
         'p_censor_t': BASE_P_CENSOR,
         'p_censor_c': BASE_P_CENSOR,
-        'p_death_given_progression_t': BASE_P_DEATH + 0.05,
-        'p_death_given_progression_c': BASE_P_DEATH + 0.2,
+        'p_death_given_progression_t': BASE_P_DEATH * 1.5,
+        'p_death_given_progression_c': BASE_P_DEATH * 4,
         'p_death_given_censor_t': BASE_P_DEATH,
         'p_death_given_censor_c': BASE_P_DEATH
     },
@@ -67,23 +66,23 @@ settings = {
         'p_death_c': BASE_P_DEATH,
         'p_censor_t': BASE_P_CENSOR,
         'p_censor_c': BASE_P_CENSOR,
-        'p_death_given_progression_t': BASE_P_DEATH + 0.1,
-        'p_death_given_progression_c': BASE_P_DEATH + 0.1,
+        'p_death_given_progression_t': BASE_P_DEATH * 1.5,
+        'p_death_given_progression_c': BASE_P_DEATH * 1.5,
         'p_death_given_censor_t': BASE_P_DEATH,
         'p_death_given_censor_c': BASE_P_DEATH
     },
     '5_censoring_driven_treat_low': {
         'n': N,
         'duration': DURATION,
-        'p_progression_t': BASE_P_PROGRESSION /2,
+        'p_progression_t': BASE_P_PROGRESSION * (3/4),
         'p_progression_c': BASE_P_PROGRESSION,
-        'p_death_t': BASE_P_DEATH / 2,
+        'p_death_t': BASE_P_DEATH * (3/4),
         'p_death_c': BASE_P_DEATH,
-        'p_censor_t': BASE_P_CENSOR + 0.1,
-        'p_censor_c': BASE_P_CENSOR + 0.05,
-        'p_death_given_progression_t': BASE_P_DEATH + 0.1,
-        'p_death_given_progression_c': BASE_P_DEATH + 0.1,
-        'p_death_given_censor_t': BASE_P_DEATH + 0.05,
+        'p_censor_t': BASE_P_CENSOR + 0.05,
+        'p_censor_c': BASE_P_CENSOR + 0.025,
+        'p_death_given_progression_t': BASE_P_DEATH * 1.5,
+        'p_death_given_progression_c': BASE_P_DEATH * 1.5,
+        'p_death_given_censor_t': BASE_P_DEATH * 1.5,
         'p_death_given_censor_c': BASE_P_DEATH
     },
     '6_censoring_driven_treat_high': {
@@ -93,11 +92,11 @@ settings = {
         'p_progression_c': BASE_P_PROGRESSION,
         'p_death_t': BASE_P_DEATH * (3/4),
         'p_death_c': BASE_P_DEATH,
-        'p_censor_t': BASE_P_CENSOR + 0.1,
-        'p_censor_c': BASE_P_CENSOR + 0.05,
-        'p_death_given_progression_t': BASE_P_DEATH + 0.2,
-        'p_death_given_progression_c': BASE_P_DEATH + 0.2,
-        'p_death_given_censor_t': BASE_P_DEATH + 0.3,
+        'p_censor_t': BASE_P_CENSOR + 0.05,
+        'p_censor_c': BASE_P_CENSOR + 0.025,
+        'p_death_given_progression_t': BASE_P_DEATH * 1.5,
+        'p_death_given_progression_c': BASE_P_DEATH * 1.5,
+        'p_death_given_censor_t': BASE_P_DEATH * 3,
         'p_death_given_censor_c': BASE_P_DEATH
     },
     '7_censoring_driven_control_high': {
@@ -107,12 +106,12 @@ settings = {
         'p_progression_c': BASE_P_PROGRESSION,
         'p_death_t': BASE_P_DEATH * (3/4),
         'p_death_c': BASE_P_DEATH,
-        'p_censor_t': BASE_P_CENSOR + 0.05,
-        'p_censor_c': BASE_P_CENSOR + 0.1,
-        'p_death_given_progression_t': BASE_P_DEATH + 0.2,
-        'p_death_given_progression_c': BASE_P_DEATH + 0.2,
+        'p_censor_t': BASE_P_CENSOR + 0.025,
+        'p_censor_c': BASE_P_CENSOR + 0.05,
+        'p_death_given_progression_t': BASE_P_DEATH * 1.5,
+        'p_death_given_progression_c': BASE_P_DEATH * 1.5,
         'p_death_given_censor_t': BASE_P_DEATH,
-        'p_death_given_censor_c': BASE_P_DEATH + 0.3
+        'p_death_given_censor_c': BASE_P_DEATH * 3
     }
 }
 
