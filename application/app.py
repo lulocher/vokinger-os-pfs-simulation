@@ -272,11 +272,11 @@ with ui.accordion(id="acc", open=["Introduction", "Parametrization", "Results"])
         with ui.div(class_="py-4 mx-auto text-left"):
             ui.markdown(
                 f"""
-                This application simulates the outcome of a clinical trial in oncology using the framework presented in Locher et al. (2024). Parameters for the simulation can be set below. When a parameter is changed, 
-                a new trial is automatically simulated. Note that the variance in the results is due to the stochastic nature of the simulation and decreases with a larger number of participants and longer duration. 
-                The results for Progression-free Survival (PFS), Expected Overall Survival (EOS), and Overall Survival (OS) are displayed in the Results tab. 
-                The goal of this application is to allow users to interact with the simulation and observe the impact of different parameters on the trial outcome.
-                For more detailed information, please refer to Locher et al. (2024). The code is open-source and available on [GitHub]({link_repo}).
+                This application simulates the outcome of a clinical trial in oncology using the framework presented in the paper "Why effect sizes are systematically larger for PFS than for OS in clinical trials for cancer drugs" (Locher, Serra-Burriel, Nussli & Vokinger, unpublished manuscript). 
+                Parameters for the simulation can be set below. When a parameter is changed, a new trial is automatically simulated. 
+                Note that the variance in the results is due to the stochastic nature of the simulation and decreases with larger numbers of participants and longer duration. The outcomes for progression-free survival (PFS) and overall survival (OS) are displayed in the Results tab. 
+                The purpose of this application is to allow users to interact with the simulation and observe the impact of different parameters on the outcome of the trial.
+                More detailed information can be found in the paper. The underlying code is open-source and available on [GitHub]({link_repo}).
                 """
             )
 
