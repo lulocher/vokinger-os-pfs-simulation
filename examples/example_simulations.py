@@ -1,5 +1,7 @@
 import os
 import pandas as pd
+from string import ascii_letters
+
 
 from simulation import simulate_trial, get_hazard_ratio_pfs, get_hazard_ratio_os, get_plot
 
@@ -117,10 +119,22 @@ settings = {
 
 plots = []
 
-for setting in settings:
+def generate_table_row(index, params):
+    letter = ascii_letters[index]
+    row = f"{letter})"
+    for key in params:
+        if key != 'duration' and key != 'n':
+            row += f" & {round(params[key], 3)}"
+        
+    return row + "\\\\\n\\hline\n"
+
+table_out = ''
+
+for i, (setting, params) in enumerate(settings.items()):
     print(f'Processing setting {setting}...')
 
-    df_trial = simulate_trial(**settings[setting])
+    table_out += generate_table_row(i, params)
+    df_trial = simulate_trial(**params)
 
     hazard_ratio_pfs = get_hazard_ratio_pfs(df_trial)
     hazard_ratio_os = get_hazard_ratio_os(df_trial)
@@ -138,3 +152,5 @@ df_settings = pd.DataFrame.from_dict(settings, orient='index')
 df_settings.to_csv(f'{path}/plots/settings.csv')
 
 print('Saved settings...')
+
+print(f'Printing settings table for LaTex:\n{table_out}')

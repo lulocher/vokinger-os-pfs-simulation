@@ -160,26 +160,6 @@ def simulate_trial(n, duration, p_progression_t, p_death_t, p_censor_t, p_death_
     df['os_event_time'] = df['t_death'].combine_first(df['duration'])
     df['has_os_event'] = df['t_death'].apply(lambda x: 1 if pd.notna(x) else 0)
 
-    def get_estimated_post_probabilities(df, time_col):
-        df_affected = df[df[time_col].notna()]
-        n_death = df_affected['has_os_event'].sum()
-        df_affected['post_periods'] = df_affected.apply(lambda x: x['t_death'] - x[time_col] if pd.notna(x['t_death']) else duration - x[time_col], axis=1)
-        
-        p_post = n_death / df_affected['post_periods'].sum()
-
-        return p_post
-
-    est_p_death_p_t = get_estimated_post_probabilities(df[df['group'] == 1], 't_progression')
-    est_p_death_p_c = get_estimated_post_probabilities(df[df['group'] == 0], 't_progression')
-
-    est_p_death_c_t = get_estimated_post_probabilities(df[df['group'] == 1], 't_censor')
-    est_p_death_c_c = get_estimated_post_probabilities(df[df['group'] == 0], 't_censor')
-
-    df[['est_p_death_p', 'est_p_death_c']]= df['group'].apply(lambda x: [est_p_death_p_t, est_p_death_c_t] if x == 1 else [est_p_death_p_c, est_p_death_c_c]).to_list()
-
-    df['eos_event_time'] = df['t_death'].combine_first(df['t_progression'] + 1 / df['est_p_death_p']).combine_first(df['t_censor'] + 1 / df['est_p_death_c']).combine_first(df['duration'])
-    df['has_eos_event'] = df.apply(lambda x: 1 if pd.notna(x['t_death']) or pd.notna(x['t_progression']) or pd.notna(x['t_censor']) else 0, axis=1)
-
     return df
 
 def get_hr(data, time_col, event_col, group_col):
