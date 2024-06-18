@@ -1,5 +1,6 @@
 import random
 from pathlib import Path
+import os
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -254,7 +255,10 @@ with ui.accordion(id="acc", open=["Introduction", "Parametrization", "Results"])
         with ui.layout_columns(col_widths={"sm": 6, "md": (6, 6)}):
             
             with ui.div(class_='mx-auto'):
-                ui.tags.img(src=link_mc, width="100%")
+                @render.image
+                def image():
+                    img = {'src': os.path.join(here, 'img/markov_chain.png'), 'width': '100%'}
+                    return img
 
             with ui.div():
                 with ui.layout_column_wrap(width=1/3, height='15px'):
