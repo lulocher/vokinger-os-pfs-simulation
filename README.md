@@ -1,4 +1,4 @@
-# Simulation of clinical trials in oncology
+# Simulation of clinical trials in cancer trials
 
 This repository contains all code related to the paper "Why effect sizes are systematically larger for PFS than for OS in clinical trials for cancer drugs" by L Locher, M Serra-Burriel, E Nussli & KN Vokinger (unpublished manuscript). For more detailed information, please refer to the paper.
 
