@@ -121,7 +121,7 @@ class Study:
 
 
 
-def simulate_trial(n, duration, p_progression_t, p_death_t, p_censor_t, p_death_given_progression_t, p_death_given_censor_t, p_progression_c, p_death_c, p_censor_c, p_death_given_progression_c, p_death_given_censor_c):
+def simulate_trial(n, duration, stable, p_progression_t, p_death_t, p_censor_t, p_death_given_progression_t, p_death_given_censor_t, p_progression_c, p_death_c, p_censor_c, p_death_given_progression_c, p_death_given_censor_c):
     study = Study(
         n=n,
         duration=duration,
@@ -136,6 +136,9 @@ def simulate_trial(n, duration, p_progression_t, p_death_t, p_censor_t, p_death_
         p_death_given_progression_control=p_death_given_progression_c,
         p_death_given_censor_control = p_death_given_censor_c
     )
+
+    if stable:
+        random.seed(42)
 
     while not study.complete:
         study.simulate_period()
@@ -217,7 +220,6 @@ def get_plot_os(df):
 # Shiny application
 ###
 
-link_mc = "https://i.ibb.co/Bf7XHG4/markov-chain.png"
 link_repo = "https://github.com/lulocher/vokinger-os-pfs-simulation"
 
 N = 20000
@@ -242,14 +244,14 @@ with ui.accordion(id="acc", open=["Introduction", "Parametrization", "Results"])
         with ui.div(class_="py-4 mx-auto text-left"):
             ui.markdown(
                 f"""
-                This application simulates the outcome of a clinical trial for cancer drugs using the framework presented in the paper "Why effect sizes are systematically larger for PFS than for OS in clinical trials for cancer drugs" (L Locher, M Serra-Burriel, E Nussli & KN Vokinger, unpublished manuscript).
-                Parameters for the simulation can be set below. When a parameter is changed, a new trial is automatically simulated. Note that the variance in the results is because of the stochastic nature of the simulation and decreases with larger numbers of participants and longer duration. The outcomes for progression-free survival (PFS) and overall survival (OS) are displayed in the Results tab. 
-                The objective of this application is to enable users to interact with the simulation and observe the impact of different parameters on the outcome of the trial. More detailed information can be found in the paper. The underlying code is open-source and available on [GitHub]({link_repo}).
+                This application simulates a clinical trial of a cancer drug using the framework presented in the article "Why effect sizes are systematically larger for PFS than for OS in clinical trials for cancer drugs" (L Locher, M Serra-Burriel, E Nussli & KN Vokinger, unpublished manuscript).
+                Parameters for the simulation can be set below. The parameters represent transition probabilities between states. To give an example, a transition probability of 0.05 from "no progression" to "progression" implies that a patient in the state "no progression" has a 5% chance to experience progression in a given time period (e.g. within a month). In this setting,
+                mean duration until progression for patients in the state 'no progression' is 20 time periods. What probabilities are realistic in real-world trials depends on the type of cancer and line of therapy. The results for progression-free survival (PFS) and overall survival (OS) are displayed in the Results tab. 
+                The objective of this application is to enable users to interact with the simulation and observe the impact of different parameters on the outcome of the trial. More detailed information can be found in the article. The underlying code is open-source and available on [GitHub]({link_repo}).
                 """
             )
 
-    with ui.accordion_panel("Parametrization"):  
-
+    with ui.accordion_panel("Parametrization"): 
         with ui.layout_columns(col_widths={"sm": 6, "md": (6, 6)}):
             
             with ui.div(class_='mx-auto'):
@@ -283,7 +285,9 @@ with ui.accordion(id="acc", open=["Introduction", "Parametrization", "Results"])
                     ui.input_slider('p_death_given_progression_control', None,  MIN_SLIDER, 0.9, DEFAULT_P * 2, step=0.01)
 
                     ''
-                    ''
+                    with ui.tooltip(placement="top"):
+                        ui.input_checkbox("stable_setting", "Stable setting", True)
+                        'If active, data is generated according to fixed random seed and results are stable. Otherwise, results vary for each run due to a stochastic component.'
                     ui.input_checkbox("show_censoring", "Allow for censoring", False)
                     
 
@@ -291,13 +295,13 @@ with ui.accordion(id="acc", open=["Introduction", "Parametrization", "Results"])
                     with ui.layout_column_wrap(width=1/3):   
                         with ui.tooltip(placement="top"):
                             '$$P_{C|NP}$$'
-                            'Probability of transitioning from "no progression" to "censored"'
+                            'Probability of transitioning from "no progression" to "measurement censored"'
                         ui.input_slider('p_censor_treatment', None,  MIN_SLIDER, MAX_SLIDER, 0, step=0.025)
                         ui.input_slider('p_censor_control', None,  MIN_SLIDER, MAX_SLIDER, 0, step=0.025)
 
                         with ui.tooltip(placement="top"):
                             '$$P_{D|C}$$'
-                            'Probability of transitioning from "censored" to "dead"'
+                            'Probability of transitioning from "measurement censored" to "dead"'
                         ui.input_slider('p_death_given_censor_treatment', None,  MIN_SLIDER, 0.9, DEFAULT_P, step=0.025)
                         ui.input_slider('p_death_given_censor_control', None,  MIN_SLIDER, 0.9, DEFAULT_P, step=0.025)
 
@@ -327,8 +331,9 @@ with ui.accordion(id="acc", open=["Introduction", "Parametrization", "Results"])
                 @render.plot(height=300)
                 def kaplan_meier_plot_os():
                     return get_plot_os(simulation_results())
-                
-        ui.input_action_button('btn_refresh', 'Simulate new Trial', style='width: 250px; height: 50px; vertical-align: middle', icon=icon_svg('arrow-rotate-right'), class_='btn-primary')
+
+        with ui.panel_conditional('!input.stable_setting'):
+            ui.input_action_button('btn_refresh', 'Simulate new Trial', style='width: 250px; height: 50px; vertical-align: middle', icon=icon_svg('arrow-rotate-right'), class_='btn-primary')
 
 
 @reactive.Calc
@@ -338,6 +343,7 @@ def simulation_results():
     return simulate_trial(
         n=input.n(),
         duration=input.duration(),
+        stable=input.stable_setting(),
 
         p_death_t=input.p_death_treatment(),
         p_death_c=input.p_death_control(), 

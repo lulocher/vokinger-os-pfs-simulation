@@ -1,0 +1,1 @@
+rsconnect deploy shiny "C:/Users/luloch/switchdrive/Common research projects/The limits of surrogates/app/vokinger-os-pfs-simulation/application/app.py" --name  lulocher --title  oncology-trial-simulator
